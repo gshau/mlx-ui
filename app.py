@@ -133,7 +133,10 @@ if model_ref.strip() != "-":
         "{{ '<|im_start|>assistant\n' }}"
         "{% endif %}"
     )
-    supports_system_role = "system role not supported" not in chat_template.lower()
+    supports_system_role = (
+        "system role not supported" not in chat_template.lower()
+        and "only user and assistant roles are supported!" not in chat_template.lower()
+    )
 
     system_prompt = st.sidebar.text_area("system prompt", "You are a helpful AI assistant trained on a vast amount of "
                                                           "human knowledge. Answer as concisely as possible.",
