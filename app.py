@@ -1,3 +1,7 @@
+import os
+import json
+
+import hashlib
 import re
 import time
 
@@ -6,9 +10,21 @@ import streamlit as st
 from mlx_lm.utils import load, generate_step
 import argparse
 
+from pathlib import Path
+
+CHAT_HISTORY_PATH = Path("./chat_history")
+
+if not CHAT_HISTORY_PATH.exists():
+    CHAT_HISTORY_PATH.mkdir()
+
+
 title = "MLX Chat"
 ver = "0.7.24"
 debug = False
+
+
+def get_hash(content):
+    return hashlib.md5(content.encode()).hexdigest()[:8]
 
 
 def generate(the_prompt, the_model):
@@ -89,6 +105,55 @@ def queue_chat(the_prompt, continuation=""):
     st.rerun()
 
 
+def save_chat_history():
+    try:
+        first_prompt = [
+            msg for msg in st.session_state.messages if msg["role"] == "user"
+        ][0]["content"]
+        hash_string = get_hash(first_prompt)
+        with open(CHAT_HISTORY_PATH / f"{hash_string}.json", "w") as file:
+            json.dump(st.session_state.messages, file)
+    except Exception as e:
+        print("Error saving chat history:", e)
+
+
+def get_recent_chat_history(limit=10):
+    recent_chat_files = os.listdir(CHAT_HISTORY_PATH)
+    recent_chat_files.sort(
+        key=lambda x: os.path.getmtime(CHAT_HISTORY_PATH / x), reverse=True
+    )
+    return recent_chat_files[:limit]
+
+
+def load_chat_history(chat_history_file):
+    with open(CHAT_HISTORY_PATH / chat_history_file, "r") as file:
+        return json.load(file)
+
+
+def get_first_prompt_for_chat_history():
+    recent_chat_files = get_recent_chat_history()
+    for chat_file in recent_chat_files:
+        chat_history = load_chat_history(chat_file)
+        for msg in chat_history:
+            if msg["role"] == "user":
+                return msg["content"]
+    return None
+
+
+def build_chat_prompt_file_map():
+    chat_prompt_file_map = {}
+    recent_chat_files = get_recent_chat_history()
+    for chat_file in recent_chat_files:
+        chat_history = load_chat_history(chat_file)
+        first_prompt = None
+        for msg in chat_history:
+            if msg["role"] == "user":
+                first_prompt = msg["content"]
+                break
+        chat_prompt_file_map[first_prompt] = chat_file
+    return chat_prompt_file_map
+
+
 # tx @cocktailpeanut
 parser = argparse.ArgumentParser(description="mlx-ui")
 parser.add_argument(
@@ -121,6 +186,15 @@ st.markdown(r"<style>.stDeployButton{display:none}</style>", unsafe_allow_html=T
 @st.cache_resource(show_spinner=True)
 def load_model_and_cache(ref):
     return load(ref, {"trust_remote_code": True})
+
+
+def forget(rerun=False):
+    st.session_state.messages = [{"role": "assistant", "content": assistant_greeting}]
+    if "prompt" in st.session_state and st.session_state["prompt"]:
+        st.session_state["prompt"] = None
+        st.session_state["continuation"] = None
+    if rerun:
+        st.rerun()
 
 
 model = None
@@ -193,13 +267,7 @@ if model_ref.strip() != "-":
         use_container_width=True,
         help="Forget the previous conversations.",
     ):
-        st.session_state.messages = [
-            {"role": "assistant", "content": assistant_greeting}
-        ]
-        if "prompt" in st.session_state and st.session_state["prompt"]:
-            st.session_state["prompt"] = None
-            st.session_state["continuation"] = None
-        st.rerun()
+        forget(rerun=True)
 
     if actions[1].button(
         "🔂 Continue", use_container_width=True, help="Continue the generation."
@@ -252,6 +320,8 @@ if model_ref.strip() != "-":
 
             queue_chat(full_prompt, last_assistant_response)
 
+    st.sidebar.markdown("---")
+
     if prompt := st.chat_input():
         st.session_state.messages.append({"role": "user", "content": prompt})
 
@@ -282,5 +352,18 @@ if model_ref.strip() != "-":
         st.session_state["prompt"] = None
         st.session_state["continuation"] = None
 
+print(st.session_state.messages)
+save_chat_history()
+chat_prompt_file_map = build_chat_prompt_file_map()
 st.sidebar.markdown("---")
+chat_history_selected = st.sidebar.selectbox(
+    "Chat History", options=chat_prompt_file_map, index=None
+)
+
+if chat_history_selected:
+    chat_history_file_selected = chat_prompt_file_map.get(chat_history_selected, None)
+    chat_history = load_chat_history(chat_history_file_selected)
+    st.session_state.messages = chat_history
+    for msg in chat_history[1:]:
+        st.chat_message(msg["role"]).write(msg["content"])
 st.sidebar.markdown(f"v{ver} / st {st.__version__}")
