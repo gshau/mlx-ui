@@ -15,8 +15,10 @@ def generate(the_prompt, the_model):
     tokens = []
     skip = 0
 
-    for (token, prob), n in zip(generate_step(mx.array(tokenizer.encode(the_prompt)), the_model, temperature),
-                                range(context_length)):
+    for (token, prob), n in zip(
+        generate_step(mx.array(tokenizer.encode(the_prompt)), the_model, temperature),
+        range(context_length),
+    ):
 
         if token == tokenizer.eos_token_id:
             break
@@ -27,7 +29,7 @@ def generate(the_prompt, the_model):
         trim = None
 
         for sw in stop_words:
-            if text[-len(sw):].lower() == sw:
+            if text[-len(sw) :].lower() == sw:
                 # definitely ends with a stop word. stop generating
                 return
             else:
@@ -46,7 +48,7 @@ def show_chat(the_prompt, previous=""):
         print(the_prompt)
         print("-" * 80)
 
-    with ((st.chat_message("assistant"))):
+    with st.chat_message("assistant"):
         message_placeholder = st.empty()
         response = previous
 
@@ -59,7 +61,7 @@ def show_chat(the_prompt, previous=""):
                 response = re.sub(r"^:+", "", response)
                 # end neural-beagle-14 fixes
 
-            response = response.replace('�', '')
+            response = response.replace("�", "")
             message_placeholder.markdown(response + "▌")
 
         message_placeholder.markdown(response)
@@ -89,14 +91,19 @@ def queue_chat(the_prompt, continuation=""):
 
 # tx @cocktailpeanut
 parser = argparse.ArgumentParser(description="mlx-ui")
-parser.add_argument("--models", type=str, help="the txt file that contains the models list", default="models.txt")
+parser.add_argument(
+    "--models",
+    type=str,
+    help="the txt file that contains the models list",
+    default="models.txt",
+)
 args = parser.parse_args()
 models_file = args.models
 
 assistant_greeting = "How may I help you?"
 
-with open(models_file, 'r') as file:
-    model_refs = [line.strip() for line in file.readlines() if not line.startswith('#')]
+with open(models_file, "r") as file:
+    model_refs = [line.strip() for line in file.readlines() if not line.startswith("#")]
 
 model_refs = {k.strip(): v.strip() for k, v in [line.split("|") for line in model_refs]}
 
@@ -118,9 +125,14 @@ def load_model_and_cache(ref):
 
 model = None
 
-model_ref = st.sidebar.selectbox("model", model_refs.keys(), format_func=lambda value: model_refs[value],
-                                 help="See https://huggingface.co/mlx-community for more models. Add your favorites "
-                                      "to models.txt")
+model_ref = st.sidebar.selectbox(
+    "model",
+    model_refs.keys(),
+    index=0,
+    #  format_func=lambda value: model_refs[value],
+    help="See https://huggingface.co/mlx-community for more models. Add your favorites "
+    "to models.txt",
+)
 
 if model_ref.strip() != "-":
     model, tokenizer = load_model_and_cache(model_ref)
@@ -138,15 +150,30 @@ if model_ref.strip() != "-":
         and "only user and assistant roles are supported!" not in chat_template.lower()
     )
 
-    system_prompt = st.sidebar.text_area("system prompt", "You are a helpful AI assistant trained on a vast amount of "
-                                                          "human knowledge. Answer as concisely as possible.",
-                                         disabled=not supports_system_role)
+    system_prompt = st.sidebar.text_area(
+        "system prompt",
+        "You are a helpful AI assistant trained on a vast amount of "
+        "human knowledge. Answer as concisely as possible.",
+        disabled=not supports_system_role,
+    )
 
-    context_length = st.sidebar.number_input('context length', value=400, min_value=100, step=100, max_value=32000,
-                                             help="how many maximum words to print, roughly")
+    context_length = st.sidebar.number_input(
+        "context length",
+        value=6400,
+        min_value=100,
+        step=100,
+        max_value=32000,
+        help="how many maximum words to print, roughly",
+    )
 
-    temperature = st.sidebar.slider('temperature', min_value=0., max_value=1., step=.10, value=.5,
-                                    help="lower means less creative but more accurate")
+    temperature = st.sidebar.slider(
+        "temperature",
+        min_value=0.0,
+        max_value=1.0,
+        step=0.10,
+        value=0.5,
+        help="lower means less creative but more accurate",
+    )
 
     st.sidebar.markdown("---")
     actions = st.sidebar.columns(2)
@@ -155,33 +182,48 @@ if model_ref.strip() != "-":
     time.sleep(0.05)
 
     if "messages" not in st.session_state:
-        st.session_state["messages"] = [{"role": "assistant", "content": assistant_greeting}]
+        st.session_state["messages"] = [
+            {"role": "assistant", "content": assistant_greeting}
+        ]
 
     stop_words = ["<|im_start|>", "<|im_end|>", "<s>", "</s>"]
 
-    if actions[0].button("😶‍🌫️ Forget", use_container_width=True,
-                         help="Forget the previous conversations."):
-        st.session_state.messages = [{"role": "assistant", "content": assistant_greeting}]
+    if actions[0].button(
+        "😶‍🌫️ Forget",
+        use_container_width=True,
+        help="Forget the previous conversations.",
+    ):
+        st.session_state.messages = [
+            {"role": "assistant", "content": assistant_greeting}
+        ]
         if "prompt" in st.session_state and st.session_state["prompt"]:
             st.session_state["prompt"] = None
             st.session_state["continuation"] = None
         st.rerun()
 
-    if actions[1].button("🔂 Continue", use_container_width=True,
-                         help="Continue the generation."):
+    if actions[1].button(
+        "🔂 Continue", use_container_width=True, help="Continue the generation."
+    ):
 
-        user_prompts = [msg["content"] for msg in st.session_state.messages if msg["role"] == "user"]
+        user_prompts = [
+            msg["content"] for msg in st.session_state.messages if msg["role"] == "user"
+        ]
 
         if user_prompts:
 
             last_user_prompt = user_prompts[-1]
 
-            assistant_responses = [msg["content"] for msg in st.session_state.messages
-                                   if msg["role"] == "assistant" and msg["content"] != assistant_greeting]
-            last_assistant_response = assistant_responses[-1] if assistant_responses else ""
+            assistant_responses = [
+                msg["content"]
+                for msg in st.session_state.messages
+                if msg["role"] == "assistant" and msg["content"] != assistant_greeting
+            ]
+            last_assistant_response = (
+                assistant_responses[-1] if assistant_responses else ""
+            )
 
             # remove last line completely, so it is regenerated correctly (in case it stopped mid-word or mid-number)
-            last_assistant_response_lines = last_assistant_response.split('\n')
+            last_assistant_response_lines = last_assistant_response.split("\n")
             if len(last_assistant_response_lines) > 1:
                 last_assistant_response_lines.pop()
                 last_assistant_response = "\n".join(last_assistant_response_lines)
@@ -193,15 +235,20 @@ if model_ref.strip() != "-":
             if supports_system_role:
                 messages.insert(0, {"role": "system", "content": system_prompt})
 
-            full_prompt = tokenizer.apply_chat_template(messages,
-                                                        tokenize=False,
-                                                        add_generation_prompt=False,
-                                                        chat_template=chat_template)
+            full_prompt = tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=False,
+                chat_template=chat_template,
+            )
             full_prompt = full_prompt.rstrip("\n")
 
             # remove last assistant response from state, as it will be replaced with a continued one
-            remove_last_occurrence(st.session_state.messages,
-                                   lambda msg: msg["role"] == "assistant" and msg["content"] != assistant_greeting)
+            remove_last_occurrence(
+                st.session_state.messages,
+                lambda msg: msg["role"] == "assistant"
+                and msg["content"] != assistant_greeting,
+            )
 
             queue_chat(full_prompt, last_assistant_response)
 
@@ -214,8 +261,12 @@ if model_ref.strip() != "-":
         messages += build_memory()
         messages += [{"role": "user", "content": prompt}]
 
-        full_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True,
-                                                    chat_template=chat_template)
+        full_prompt = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            chat_template=chat_template,
+        )
         full_prompt = full_prompt.rstrip("\n")
 
         queue_chat(full_prompt)
